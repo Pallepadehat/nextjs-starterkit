@@ -4,7 +4,8 @@ A modern Next.js starter template with a powerful tech stack and essential featu
 
 ## Features
 
-- ⚡️ [Next.js 14](https://nextjs.org/) with App Router
+- ⚡️ [Next.js 15](https://nextjs.org/) with App Router
+- 🔐 [Auth.js v5](https://authjs.dev/) for authentication
 - 🔥 [TypeScript](https://www.typescriptlang.org/) for type safety
 - 🎨 [Tailwind CSS](https://tailwindcss.com/) for styling
 - 🌙 Dark mode with [next-themes](https://github.com/pacocoursey/next-themes)
@@ -35,6 +36,22 @@ yarn install
 cp .env.example .env
 ```
 
+Update your `.env` file with the following variables:
+```bash
+# Database
+DATABASE_URL="your-database-url"
+
+# Auth.js
+AUTH_SECRET="your-auth-secret" # Run: openssl rand -base64 32
+AUTH_URL="http://localhost:3000"
+
+# OAuth Providers (optional)
+GITHUB_ID="your-github-id"
+GITHUB_SECRET="your-github-secret"
+GOOGLE_ID="your-google-id"
+GOOGLE_SECRET="your-google-secret"
+```
+
 4. Set up Prisma:
 ```bash
 # Initialize your database
@@ -59,8 +76,11 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ```
 ├── app/                # Next.js App Router directory
+│   ├── api/           # API routes including auth
+│   ├── auth/          # Auth.js routes and components
 ├── components/         # React components
 ├── lib/               # Utility functions and configurations
+│   ├── auth.ts        # Auth.js configuration
 ├── prisma/            # Prisma schema and migrations
 ├── public/            # Static assets
 └── styles/            # Global styles
@@ -87,6 +107,109 @@ Configuration files:
 - `.prettierrc.js` - Prettier configuration
 - `tsconfig.json` - TypeScript configuration
 
+## Authentication
+
+This project uses Auth.js v5 for authentication with the following features:
+- Session-based authentication
+- OAuth providers (GitHub, Google) support
+- JWT session strategy
+- Protected API routes and pages
+- TypeScript support
+- Integration with Prisma for user data storage
+
+### Session Management & Route Protection
+
+#### Protected Pages
+
+You can protect pages by checking the session using the `auth` function:
+
+```tsx
+// app/protected/page.tsx
+import { auth } from "@/auth"
+
+export default async function ProtectedPage() {
+  const session = await auth()
+  if (!session) return <div>Not authenticated</div>
+
+  return (
+    <div>
+      <h1>Protected Page</h1>
+      <pre>{JSON.stringify(session, null, 2)}</pre>
+    </div>
+  )
+}
+```
+
+#### Protected API Routes
+
+API routes can be protected using the `auth` wrapper:
+
+```tsx
+// app/api/protected/route.ts
+import { auth } from "@/auth"
+import { NextResponse } from "next/server"
+
+export const GET = auth(function GET(req) {
+  if (req.auth) return NextResponse.json(req.auth)
+  return NextResponse.json({ message: "Not authenticated" }, { status: 401 })
+})
+```
+
+#### Middleware Protection
+
+This starter includes global route protection using Next.js middleware:
+
+```tsx
+// middleware.ts
+export { auth as middleware } from "@/auth"
+
+// Protect all routes except public ones
+export const config = {
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+}
+```
+
+The middleware is configured in `auth.ts`:
+
+```tsx
+// auth.ts
+import NextAuth from "next-auth"
+
+export const { auth, handlers } = NextAuth({
+  callbacks: {
+    authorized: async ({ auth }) => {
+      // Logged in users are authenticated, otherwise redirect to login page
+      return !!auth
+    },
+  },
+})
+```
+
+For more granular control, you can customize the middleware behavior:
+
+```tsx
+// middleware.ts
+import { auth } from "@/auth"
+
+export default auth((req) => {
+  // Allow public routes
+  if (
+    req.nextUrl.pathname.startsWith("/login") ||
+    req.nextUrl.pathname.startsWith("/register")
+  ) {
+    return null
+  }
+
+  // Redirect unauthenticated users to login
+  if (!req.auth) {
+    const newUrl = new URL("/login", req.nextUrl.origin)
+    return Response.redirect(newUrl)
+  }
+})
+```
+
+💡 **Security Note**: While middleware provides a convenient way to protect routes, you should always verify the session as close to your data fetching as possible for maximum security.
+
 ## Dark Mode
 
 Dark mode is implemented using `next-themes` and can be toggled using the `ThemeProvider` component. The theme persists across page reloads and respects the user's system preferences by default.
@@ -98,6 +221,7 @@ This project uses Prisma as the ORM with the following features:
 - Auto-generated Prisma Client
 - Database migrations
 - Prisma Studio for database management
+- Built-in Auth.js adapter for user management
 
 ## UI Components
 
@@ -108,6 +232,7 @@ This project uses Prisma as the ORM with the following features:
 To learn more about the technologies used in this starter kit:
 
 - [Next.js Documentation](https://nextjs.org/docs)
+- [Auth.js Documentation](https://authjs.dev/reference/nextjs)
 - [Prisma Documentation](https://www.prisma.io/docs)
 - [Tailwind CSS Documentation](https://tailwindcss.com/docs)
 - [shadcn/ui Documentation](https://ui.shadcn.com)
